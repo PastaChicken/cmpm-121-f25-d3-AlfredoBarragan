@@ -15,7 +15,7 @@
 ## D3.a: Core mechanics (token collection and crafting)
 
 0: Implement a startder PLAN.md (this file into project) [X]
-
+0a: Display the value on squares before procceding [X]
 1: Assemble a map-based user interface using the Leaflet mapping framework. [ ]
 1a: Make it the whole world map! either google maps or a world map. [ ]
 

@@ -78,27 +78,39 @@ function spawnCache(i: number, j: number) {
   const rect = leaflet.rectangle(bounds);
   rect.addTo(map);
 
+  // Each cache has a random point value, mutable by the player
+  let pointValue = Math.floor(luck([i, j, "initialValue"].toString()) * 100);
+
+  // Show the current point value on the rectangle
+  rect.bindTooltip(pointValue.toString(), {
+    permanent: true,
+    direction: "center",
+    className: "cacheLabel",
+  });
+
   // Handle interactions with the cache
   rect.bindPopup(() => {
-    // Each cache has a random point value, mutable by the player
-    let pointValue = Math.floor(luck([i, j, "initialValue"].toString()) * 100);
-
     // The popup offers a description and button
     const popupDiv = document.createElement("div");
     popupDiv.innerHTML = `
                 <div>There is a cache here at "${i},${j}". It has value <span id="value">${pointValue}</span>.</div>
                 <button id="poke">poke</button>`;
 
+    const pokeButton = popupDiv.querySelector<HTMLButtonElement>("#poke")!;
+    const valueSpan = popupDiv.querySelector<HTMLSpanElement>("#value")!;
+
     // Clicking the button decrements the cache's value and increments the player's points
-    popupDiv
-      .querySelector<HTMLButtonElement>("#poke")!
-      .addEventListener("click", () => {
-        pointValue--;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-          pointValue.toString();
-        playerPoints++;
-        statusPanelDiv.innerHTML = `${playerPoints} points accumulated`;
-      });
+    pokeButton.addEventListener("click", () => {
+      pointValue--;
+      valueSpan.innerHTML = pointValue.toString();
+
+      rect.getTooltip()?.setContent(pointValue.toString());
+      if (pointValue <= 0) {
+        pokeButton.disabled = true;
+      }
+      playerPoints++;
+      statusPanelDiv.innerHTML = `${playerPoints} points accumulated`;
+    });
 
     return popupDiv;
   });
