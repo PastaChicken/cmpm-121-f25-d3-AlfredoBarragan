@@ -1,5 +1,17 @@
 #controlPanel {
-  padding: 1rem;
+  /* place the controls fixed at the bottom center of the viewport
+     and layout child elements horizontally so the status panel can sit
+     to the right of the controls. */
+  position: fixed;
+  left: 20%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  padding: 0.4rem;
+  z-index: 1000;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 #statusPanel {
@@ -29,4 +41,98 @@
 #map:focus {
   outline: 3px solid rgba(0, 123, 255, 0.45);
   outline-offset: -3px;
+}
+
+/* Control panel UI for on-screen buttons */
+#controlPanel #controls {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 0.6rem;
+  border-radius: 6px;
+  /* layout children left (keys) and right (help) horizontally */
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 280px;
+  max-width: 680px;
+}
+
+#controlPanel h3 {
+  margin: 0 0 0.4rem 0;
+  font-size: 0.95rem;
+}
+
+.keys {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.keys .key {
+  width: 44px;
+  height: 44px;
+  margin: 0 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.keys > div {
+  display: flex;
+  gap: 8px;
+}
+
+.hint {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #333;
+}
+
+/* Right-side scroll/navigation info */
+#controlPanel #controls .right {
+  min-width: 180px;
+}
+
+.scroll-info ul {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+/* Make the control panel stack vertically on narrow screens */
+@media (max-width: 420px) {
+  #controlPanel #controls {
+    flex-direction: column;
+    align-items: center;
+  }
+  #controlPanel #controls .right {
+    min-width: unset;
+  }
+}
+
+/* Style the status panel so it appears as a compact box to the right
+   of the controls. */
+#statusPanel {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 0.5rem 0.8rem;
+  border-radius: 6px;
+  min-width: 120px;
+  text-align: center;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  /* On smaller screens stack status below controls to avoid cramped layout */
+  #controlPanel {
+    flex-direction: column;
+  }
+  #statusPanel {
+    width: 100%;
+  }
 }

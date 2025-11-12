@@ -22,7 +22,10 @@
 
 2: make the player be able to traverse the map now [X]
 
-3:Generate tiles when scrolling through map
+3:Generate tiles when scrolling through map [X]
+3a: Fixed player traversal being limited and can traverse indefinantly.
+
+3.5: Added helpful UI to explain some of the controls I added to the game. [X]
 
 4:Add tokens that the player can collect (start at 0, player gets 1, finds another 1, gets 2.. ect.. up till 256)
 

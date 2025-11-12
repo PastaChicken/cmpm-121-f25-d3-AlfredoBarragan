@@ -17,18 +17,69 @@ const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 document.body.append(controlPanelDiv);
 
+// Populate the control panel with helpful instructions and on-screen buttons
+controlPanelDiv.innerHTML = `
+  <div id="controls">
+    <div class="left">
+      <h3>Controls</h3>
+      <div class="keys">
+        <button id="w-btn" class="key">W</button>
+        <div>
+          <button id="a-btn" class="key">A</button>
+          <button id="s-btn" class="key">S</button>
+          <button id="d-btn" class="key">D</button>
+        </div>
+      </div>
+      <div class="hint">Click a square to open a cache, then press <strong>poke</strong> to collect points.</div>
+    </div>
+    <div class="right">
+      <h3>Map Navigation</h3>
+      <div class="scroll-info">
+        <ul>
+          <li>Pan: click + drag the map</li>
+          <li>Scroll (wheel / two-finger): pans the map where you scroll</li>
+          <li>Arrow keys: small pan steps</li>
+          <li>PageUp / PageDown: larger pan steps</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+`;
+
+// Hook up the control buttons to existing movement handlers
+const wBtn = document.getElementById("w-btn") as HTMLButtonElement;
+const aBtn = document.getElementById("a-btn") as HTMLButtonElement;
+const sBtn = document.getElementById("s-btn") as HTMLButtonElement;
+const dBtn = document.getElementById("d-btn") as HTMLButtonElement;
+
+function movePlayerBy(di: number, dj: number) {
+  playerTileI = playerTileI + di;
+  playerTileJ = playerTileJ + dj;
+  updatePlayerPosition();
+  updateCachesInView();
+}
+
+wBtn.addEventListener("click", () => movePlayerBy(1, 0));
+aBtn.addEventListener("click", () => movePlayerBy(0, -1));
+sBtn.addEventListener("click", () => movePlayerBy(-1, 0));
+dBtn.addEventListener("click", () => movePlayerBy(0, 1));
+
+// (status panel will be moved into the control panel after it's created)
+
 const mapDiv = document.createElement("div");
 mapDiv.id = "map";
 document.body.append(mapDiv);
 
 const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
-document.body.append(statusPanelDiv);
+// put the status panel inside the control panel so points appear to the right
+// of the WASD/map navigation controls instead of underneath.
+controlPanelDiv.appendChild(statusPanelDiv);
 
-// Our classroom location
-const CLASSROOM_LATLNG = leaflet.latLng(
-  36.997936938057016,
-  -122.05703507501151,
+// Player Location
+const PLAYER_START = leaflet.latLng(
+  19.4326,
+  -99.1332,
 );
 
 // Tunable gameplay parameters
@@ -46,7 +97,7 @@ const RENDER_PADDING = 1;
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
-  center: CLASSROOM_LATLNG,
+  center: PLAYER_START,
   zoom: GAMEPLAY_ZOOM_LEVEL,
   minZoom: GAMEPLAY_ZOOM_LEVEL,
   maxZoom: GAMEPLAY_ZOOM_LEVEL,
@@ -64,7 +115,7 @@ leaflet
   .addTo(map);
 
 // Add a marker to represent the player (we'll keep it centered in a tile)
-const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
+const playerMarker = leaflet.marker(PLAYER_START);
 playerMarker.addTo(map);
 
 // Make the map div focusable so keyboard controls work
@@ -165,8 +216,8 @@ function _clampTile(v: number) {
 
 function updatePlayerPosition() {
   // center the player in the tile (use +0.5 to get tile center)
-  const lat = CLASSROOM_LATLNG.lat + (playerTileI + 0.5) * TILE_DEGREES;
-  const lng = CLASSROOM_LATLNG.lng + (playerTileJ + 0.5) * TILE_DEGREES;
+  const lat = PLAYER_START.lat + (playerTileI + 0.5) * TILE_DEGREES;
+  const lng = PLAYER_START.lng + (playerTileJ + 0.5) * TILE_DEGREES;
   const latlng = leaflet.latLng(lat, lng);
 
   playerMarker.setLatLng(latlng);
@@ -208,7 +259,7 @@ function cellKey(i: number, j: number) {
 function renderCacheEntry(entry: CacheEntry) {
   if (entry.rendered) return;
 
-  const origin = CLASSROOM_LATLNG;
+  const origin = PLAYER_START;
   const bounds = leaflet.latLngBounds([
     [origin.lat + entry.i * TILE_DEGREES, origin.lng + entry.j * TILE_DEGREES],
     [
@@ -290,13 +341,13 @@ function updateCachesInView() {
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
 
-  const minI = Math.floor((sw.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES) -
+  const minI = Math.floor((sw.lat - PLAYER_START.lat) / TILE_DEGREES) -
     RENDER_PADDING;
-  const maxI = Math.floor((ne.lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES) +
+  const maxI = Math.floor((ne.lat - PLAYER_START.lat) / TILE_DEGREES) +
     RENDER_PADDING;
-  const minJ = Math.floor((sw.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES) -
+  const minJ = Math.floor((sw.lng - PLAYER_START.lng) / TILE_DEGREES) -
     RENDER_PADDING;
-  const maxJ = Math.floor((ne.lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES) +
+  const maxJ = Math.floor((ne.lng - PLAYER_START.lng) / TILE_DEGREES) +
     RENDER_PADDING;
 
   const visible = new Set<string>();
