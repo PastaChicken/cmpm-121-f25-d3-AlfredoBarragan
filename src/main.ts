@@ -61,6 +61,61 @@ const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
+// Make the map div focusable so keyboard controls work
+// and enable wheel-to-pan behavior (useful when zooming is fixed).
+mapDiv.tabIndex = 0;
+mapDiv.setAttribute("role", "application");
+
+// When the user scrolls the mouse wheel over the map, pan instead of
+// allowing the page to scroll. We prevent the default (so the page
+// doesn't move) and pan the map by the wheel delta in pixels.
+mapDiv.addEventListener(
+  "wheel",
+  (ev: WheelEvent) => {
+    ev.preventDefault();
+    // Use the wheel deltas directly as pixel offsets for panBy.
+    // Positive deltaY -> pan down (show more northern content),
+    // positive deltaX -> pan right.
+    map.panBy([ev.deltaX, ev.deltaY], { animate: false });
+  },
+  { passive: false },
+);
+
+// Keyboard navigation when the map has focus. Arrow keys and
+// PageUp/PageDown pan the map by fixed pixel amounts.
+mapDiv.addEventListener("keydown", (ev: KeyboardEvent) => {
+  const step = 120; // pixels per arrow press
+  // globalThis is safe in Deno and browsers; fall back to 600px if unavailable
+  const _global = globalThis as unknown as { innerHeight?: number };
+  const large = Math.round((_global.innerHeight ?? 600) * 0.5); // page scroll size
+  switch (ev.key) {
+    case "ArrowUp":
+      map.panBy([0, -step]);
+      ev.preventDefault();
+      break;
+    case "ArrowDown":
+      map.panBy([0, step]);
+      ev.preventDefault();
+      break;
+    case "ArrowLeft":
+      map.panBy([-step, 0]);
+      ev.preventDefault();
+      break;
+    case "ArrowRight":
+      map.panBy([step, 0]);
+      ev.preventDefault();
+      break;
+    case "PageUp":
+      map.panBy([0, -large]);
+      ev.preventDefault();
+      break;
+    case "PageDown":
+      map.panBy([0, large]);
+      ev.preventDefault();
+      break;
+  }
+});
+
 // Display the player's points
 let playerPoints = 0;
 statusPanelDiv.innerHTML = "No points yet...";
@@ -79,7 +134,7 @@ function spawnCache(i: number, j: number) {
   rect.addTo(map);
 
   // Each cache has a random point value, mutable by the player
-  let pointValue = Math.floor(luck([i, j, "initialValue"].toString()) * 100);
+  let pointValue = Math.floor(luck([i, j, "initialValue"].toString()) * 2);
 
   // Show the current point value on the rectangle
   rect.bindTooltip(pointValue.toString(), {

@@ -16,7 +16,7 @@
 
 0: Implement a startder PLAN.md (this file into project) [X]
 0a: Display the value on squares before procceding [X]
-1: Assemble a map-based user interface using the Leaflet mapping framework. [ ]
+1: Assemble a map-based user interface using the Leaflet mapping framework. [X]
 1a: Make it the whole world map! either google maps or a world map. [ ]
 
 2:Add tokens that the player can collect (start at 0, player gets 1, finds another 1, gets 2.. ect.. up till 256)

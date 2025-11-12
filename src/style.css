@@ -12,7 +12,7 @@
 }
 
 .leaflet-tooltip.cacheLabel {
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.85);
   border: 1px solid #333;
   border-radius: 4px;
   padding: 2px 5px;
@@ -23,4 +23,10 @@
   pointer-events: none; /* avoid interfering with clicks*/
   white-space: nowrap;
   text-align: center;
+}
+
+/* Make it obvious the map has keyboard focus so users know arrow keys will pan */
+#map:focus {
+  outline: 3px solid rgba(0, 123, 255, 0.45);
+  outline-offset: -3px;
 }
