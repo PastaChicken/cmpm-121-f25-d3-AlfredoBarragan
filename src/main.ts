@@ -56,9 +56,8 @@ leaflet
   })
   .addTo(map);
 
-// Add a marker to represent the player
+// Add a marker to represent the player (we'll keep it centered in a tile)
 const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
-playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
 // Make the map div focusable so keyboard controls work
@@ -113,12 +112,71 @@ mapDiv.addEventListener("keydown", (ev: KeyboardEvent) => {
       map.panBy([0, large]);
       ev.preventDefault();
       break;
+    // WASD controls to move the player tile-by-tile
+    case "w":
+    case "W":
+      playerTileI = clampTile(playerTileI + 1);
+      updatePlayerPosition();
+      ev.preventDefault();
+      break;
+    case "s":
+    case "S":
+      playerTileI = clampTile(playerTileI - 1);
+      updatePlayerPosition();
+      ev.preventDefault();
+      break;
+    case "a":
+    case "A":
+      playerTileJ = clampTile(playerTileJ - 1);
+      updatePlayerPosition();
+      ev.preventDefault();
+      break;
+    case "d":
+    case "D":
+      playerTileJ = clampTile(playerTileJ + 1);
+      updatePlayerPosition();
+      ev.preventDefault();
+      break;
   }
 });
 
-// Display the player's points
+// Display the player's points and tile position
 let playerPoints = 0;
+// Player tile coordinates relative to CLASSROOM_LATLNG (i -> latitude, j -> longitude)
+let playerTileI = 0;
+let playerTileJ = 0;
+
+function clampTile(v: number) {
+  // spawnCache uses i in [-NEIGHBORHOOD_SIZE, NEIGHBORHOOD_SIZE)
+  return Math.max(-NEIGHBORHOOD_SIZE, Math.min(NEIGHBORHOOD_SIZE - 1, v));
+}
+
+function updatePlayerPosition() {
+  // center the player in the tile (use +0.5 to get tile center)
+  const lat = CLASSROOM_LATLNG.lat + (playerTileI + 0.5) * TILE_DEGREES;
+  const lng = CLASSROOM_LATLNG.lng + (playerTileJ + 0.5) * TILE_DEGREES;
+  const latlng = leaflet.latLng(lat, lng);
+
+  playerMarker.setLatLng(latlng);
+  // update tooltip to show coords and optionally points
+  const tip = `You (${playerTileI},${playerTileJ})`;
+  // create or update tooltip content
+  if (playerMarker.getTooltip()) {
+    playerMarker.getTooltip()!.setContent(tip);
+  } else {
+    playerMarker.bindTooltip(tip, { permanent: false, direction: "top" });
+  }
+
+  // Ensure player is visible by centering the map on them
+  map.panTo(latlng, { animate: false });
+
+  statusPanelDiv.innerHTML =
+    `${playerPoints} points — pos (${playerTileI},${playerTileJ})`;
+}
+
+// initialize status and marker position
 statusPanelDiv.innerHTML = "No points yet...";
+updatePlayerPosition();
 
 // Add caches to the map by cell numbers
 function spawnCache(i: number, j: number) {

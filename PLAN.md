@@ -19,6 +19,7 @@
 1: Assemble a map-based user interface using the Leaflet mapping framework. [X]
 1a: this step also included adding the scrollable map (no generation yet outside inital size)
 1b: also made it so that the squares now only display 0 & 1
+
 2: make the player be able to traverse the map now
 
 4:Add tokens that the player can collect (start at 0, player gets 1, finds another 1, gets 2.. ect.. up till 256)
