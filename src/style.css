@@ -3,8 +3,8 @@
      and layout child elements horizontally so the status panel can sit
      to the right of the controls. */
   position: fixed;
-  left: 20%;
-  bottom: 12px;
+  left: 26%;
+  bottom: 5px;
   transform: translateX(-50%);
   padding: 0.4rem;
   z-index: 1000;
@@ -26,7 +26,7 @@
 .leaflet-tooltip.cacheLabel {
   background-color: rgba(255, 255, 255, 0.85);
   border: 1px solid #333;
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 2px 5px;
   font-size: 12px;
   color: #000;
@@ -46,7 +46,7 @@
 /* Control panel UI for on-screen buttons */
 #controlPanel #controls {
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  /* border: 0px solid rgba(0, 0, 0, 0.12); */
   padding: 0.6rem;
   border-radius: 6px;
   /* layout children left (keys) and right (help) horizontally */

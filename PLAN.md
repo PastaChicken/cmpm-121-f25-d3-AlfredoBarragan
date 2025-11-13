@@ -29,8 +29,8 @@
 
 4:Add tokens that the player can collect (start at 0, player gets 1, finds another 1, gets 2.. ect.. up till 256)
 
-5: make player combine tokens if matching and moving.
-6: make player current token go higher
+4.1: make player combine tokens if matching and moving.
+4.2: make player current token go higher
 
 ## D3.b: Globe-spanning gameplay
 

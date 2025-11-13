@@ -30,7 +30,7 @@ controlPanelDiv.innerHTML = `
           <button id="d-btn" class="key">D</button>
         </div>
       </div>
-      <div class="hint">Click a square to open a cache, then press <strong>poke</strong> to collect points.</div>
+      <div class="hint">Click a square to open a cache, then use <strong>Collect</strong> to pick it up or <strong>Combine</strong> to merge matching values.</div>
     </div>
     <div class="right">
       <h3>Map Navigation</h3>
@@ -94,6 +94,8 @@ const CACHE_SPAWN_PROBABILITY = 0.1;
 const UNRENDER_FAR = true;
 // Extra padding (in tiles) around viewport to render so panning looks smooth.
 const RENDER_PADDING = 1;
+// Gameplay: how far (in tiles) the player can poke caches
+const POKE_RANGE = 2;
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
@@ -203,10 +205,11 @@ mapDiv.addEventListener("keydown", (ev: KeyboardEvent) => {
 });
 
 // Display the player's points and tile position
-let playerPoints = 0;
 // Player tile coordinates relative to CLASSROOM_LATLNG (i -> latitude, j -> longitude)
 let playerTileI = 0;
 let playerTileJ = 0;
+// The player can hold a single token (value) at a time
+let heldValue: number | null = null;
 
 function _clampTile(v: number) {
   // Allow free movement: return value unchanged. Kept as a noop so
@@ -233,12 +236,15 @@ function updatePlayerPosition() {
   // Ensure player is visible by centering the map on them
   map.panTo(latlng, { animate: false });
 
-  statusPanelDiv.innerHTML =
-    `${playerPoints} points — pos (${playerTileI},${playerTileJ})`;
+  statusPanelDiv.innerHTML = `Held: ${
+    heldValue ?? "None"
+  } — pos (${playerTileI},${playerTileJ})`;
 
   // Generate/update caches for the current view so tiles near the player exist
   // immediately after movement.
   updateCachesInView();
+  // Refresh visual state of caches so pokable ones are highlighted
+  refreshAllCacheStyles();
 }
 // CacheEntry type stores generated cache state. Kept simple so entries
 // can be serialized later if desired.
@@ -283,19 +289,70 @@ function renderCacheEntry(entry: CacheEntry) {
     const popupDiv = document.createElement("div");
     popupDiv.innerHTML = `
         <div>There is a cache here at "${entry.i},${entry.j}". It has value <span class="value">${entry.pointValue}</span>.</div>
-        <button class="poke">poke</button>`;
+        <div class="popup-actions">
+          <button class="collect">Collect</button>
+          <button class="combine">Combine</button>
+        </div>`;
 
-    const pokeButton = popupDiv.querySelector<HTMLButtonElement>(".poke")!;
+    const collectButton = popupDiv.querySelector<HTMLButtonElement>(
+      ".collect",
+    )!;
+    const combineButton = popupDiv.querySelector<HTMLButtonElement>(
+      ".combine",
+    )!;
     const valueSpan = popupDiv.querySelector<HTMLSpanElement>(".value")!;
 
-    pokeButton.addEventListener("click", () => {
-      if (entry.pointValue <= 0) return;
-      entry.pointValue -= 1;
+    // initial enabled/disabled states
+    collectButton.disabled = !canPoke(entry) || entry.pointValue <= 0 ||
+      heldValue !== null;
+    // combine enabled when in range, player holds a value, and either the square is empty or it matches heldValue
+    combineButton.disabled = !(canPoke(entry) && heldValue !== null &&
+      (entry.pointValue === 0 || heldValue === entry.pointValue));
+
+    // Collect: pick up the cache's value if player holds nothing — cache becomes empty
+    collectButton.addEventListener("click", () => {
+      if (!canPoke(entry) || entry.pointValue <= 0 || heldValue !== null) {
+        return;
+      }
+      heldValue = entry.pointValue;
+      entry.pointValue = 0;
       valueSpan.innerHTML = entry.pointValue.toString();
       rect.getTooltip()?.setContent(entry.pointValue.toString());
-      if (entry.pointValue <= 0) pokeButton.disabled = true;
-      playerPoints++;
-      statusPanelDiv.innerHTML = `${playerPoints} points accumulated`;
+      // update status
+      statusPanelDiv.innerHTML =
+        `Held: ${heldValue} — pos (${playerTileI},${playerTileJ})`;
+      // refresh visuals so combine availability updates
+      refreshAllCacheStyles();
+    });
+
+    // Combine: place held value into empty square, or combine when values match
+    combineButton.addEventListener("click", () => {
+      if (!canPoke(entry) || heldValue === null) return;
+      // If square is empty, place held value into it
+      if (entry.pointValue === 0) {
+        entry.pointValue = heldValue;
+        heldValue = null;
+        valueSpan.innerHTML = entry.pointValue.toString();
+        rect.getTooltip()?.setContent(entry.pointValue.toString());
+        statusPanelDiv.innerHTML = `Held: ${
+          heldValue ?? "None"
+        } — pos (${playerTileI},${playerTileJ})`;
+        refreshAllCacheStyles();
+        return;
+      }
+
+      // Otherwise only allow combining when held value equals square value
+      if (heldValue !== entry.pointValue) return;
+      const newVal = heldValue + entry.pointValue;
+      entry.pointValue = newVal;
+      // clear player's held token
+      heldValue = null;
+      valueSpan.innerHTML = entry.pointValue.toString();
+      rect.getTooltip()?.setContent(entry.pointValue.toString());
+      statusPanelDiv.innerHTML = `Held: ${
+        heldValue ?? "None"
+      } — pos (${playerTileI},${playerTileJ})`;
+      refreshAllCacheStyles();
     });
 
     return popupDiv;
@@ -303,6 +360,55 @@ function renderCacheEntry(entry: CacheEntry) {
 
   entry.rect = rect;
   entry.rendered = true;
+
+  // Apply initial visual state depending on whether the player can poke this cache
+  updateCacheVisual(entry);
+}
+
+function canPoke(entry: CacheEntry) {
+  // Use Chebyshev distance so the player can poke in a square radius
+  const di = Math.abs(entry.i - playerTileI);
+  const dj = Math.abs(entry.j - playerTileJ);
+  return Math.max(di, dj) <= POKE_RANGE;
+}
+
+function updateCacheVisual(entry: CacheEntry) {
+  if (!entry.rendered || !entry.rect) return;
+
+  const pokable = canPoke(entry);
+  // style for pokable vs non-pokable caches
+  const pokableStyle = { color: "#2b8a3e", fillColor: "#dff8e6", weight: 2 };
+  const normalStyle = { color: "#3388ff", fillColor: "#cfe6ff", weight: 1 };
+  entry.rect.setStyle(pokable ? pokableStyle : normalStyle);
+
+  // If the popup for this rect is currently open, update the collect/combine button states
+  const popup = entry.rect.getPopup && entry.rect.getPopup();
+  if (popup && entry.rect.isPopupOpen && entry.rect.isPopupOpen()) {
+    const popupEl = popup.getElement && popup.getElement();
+    if (popupEl) {
+      const collectButton = popupEl.querySelector<HTMLButtonElement>(
+        ".collect",
+      );
+      const combineButton = popupEl.querySelector<HTMLButtonElement>(
+        ".combine",
+      );
+      if (collectButton) {
+        collectButton.disabled = !pokable || entry.pointValue <= 0 ||
+          heldValue !== null;
+      }
+      if (combineButton) {
+        // combine allowed when pokable and player holds a value and (square empty OR values match)
+        combineButton.disabled = !(pokable && heldValue !== null &&
+          (entry.pointValue === 0 || heldValue === entry.pointValue));
+      }
+    }
+  }
+}
+
+function refreshAllCacheStyles() {
+  for (const entry of cacheStore.values()) {
+    updateCacheVisual(entry);
+  }
 }
 
 function ensureCacheRendered(i: number, j: number) {
