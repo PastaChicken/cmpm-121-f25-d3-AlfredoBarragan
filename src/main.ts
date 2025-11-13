@@ -11,6 +11,36 @@ import "./_leafletWorkaround.ts"; // fixes for missing Leaflet images
 // Import our luck function
 import luck from "./_luck.ts";
 
+// --------------------
+// Config & Types
+// --------------------
+// Player/world origin (can be changed to move the world anchor)
+const PLAYER_START = leaflet.latLng(19.4326, -99.1332);
+
+// Tunable gameplay parameters
+const GAMEPLAY_ZOOM_LEVEL = 19;
+const TILE_DEGREES = 1e-4;
+const CACHE_SPAWN_PROBABILITY = 0.1;
+// When true, caches that move outside the rendered viewport will be removed
+// from the map (unrendered) but kept in the cacheStore so they can be
+// re-rendered later with their original state. When false, once a cache is
+// rendered it will remain on the map forever.
+const UNRENDER_FAR = true;
+// Extra padding (in tiles) around viewport to render so panning looks smooth.
+const RENDER_PADDING = 1;
+// Gameplay: how far (in tiles) the player can act on caches
+const INTERACT_RANGE = 2;
+
+// CacheEntry type stores generated cache state. Kept simple so entries
+// can be serialized later if desired.
+type CacheEntry = {
+  i: number;
+  j: number;
+  pointValue: number;
+  rect?: leaflet.Rectangle;
+  rendered: boolean;
+};
+
 // Create basic UI elements
 
 const controlPanelDiv = document.createElement("div");
@@ -52,11 +82,66 @@ const aBtn = document.getElementById("a-btn") as HTMLButtonElement;
 const sBtn = document.getElementById("s-btn") as HTMLButtonElement;
 const dBtn = document.getElementById("d-btn") as HTMLButtonElement;
 
+// Simple `player` object that centralizes player actions while keeping the
+// existing global tile and held-value state for compatibility with the
+// rest of the module. Methods delegate to the legacy globals (so this
+// change is incremental and low-risk).
+interface Player {
+  tileI: number;
+  tileJ: number;
+  heldValue: number | null;
+  moveBy(di: number, dj: number): void;
+  updatePosition(): void;
+  setHeld(value: number | null): void;
+  updateUI(): void;
+}
+
+const player: Player = {
+  tileI: 0,
+  tileJ: 0,
+  heldValue: null,
+  moveBy(di: number, dj: number) {
+    playerTileI = playerTileI + di;
+    playerTileJ = playerTileJ + dj;
+    updatePlayerPosition();
+    updateCachesInView();
+  },
+  updatePosition() {
+    updatePlayerPosition();
+  },
+  setHeld(value: number | null) {
+    heldValue = value;
+    updatePlayerPosition();
+  },
+  updateUI() {
+    statusPanelDiv.innerHTML = `Held: ${
+      heldValue ?? "None"
+    } — pos (${playerTileI},${playerTileJ})`;
+  },
+};
+
+// Interface describing the cache manager API. We forward-declare the
+// `CacheManager` variable so earlier code can call its methods; the actual
+// implementation will be attached after the existing cache helper functions.
+interface CacheManagerInterface {
+  cacheStore: Map<string, CacheEntry>;
+  cellKey(i: number, j: number): string;
+  renderCacheEntry(entry: CacheEntry): void;
+  ensureCacheRendered(i: number, j: number): void;
+  unrenderFarCaches(visibleKeys: Set<string>): void;
+  updateCachesInView(): void;
+  refreshAllCacheStyles(): void;
+  updateCacheVisual(entry: CacheEntry): void;
+  canInteract(entry: CacheEntry): boolean;
+}
+
 function movePlayerBy(di: number, dj: number) {
-  playerTileI = playerTileI + di;
-  playerTileJ = playerTileJ + dj;
-  updatePlayerPosition();
-  updateCachesInView();
+  // Delegate to the player object's move method. The player object is
+  // declared later in the file but that's fine: the event listeners won't
+  // invoke this until after the page has loaded and the player is created.
+  if (typeof player !== "undefined" && player) {
+    player.moveBy(di, dj);
+  }
 }
 
 wBtn.addEventListener("click", () => movePlayerBy(1, 0));
@@ -76,26 +161,7 @@ statusPanelDiv.id = "statusPanel";
 // of the WASD/map navigation controls instead of underneath.
 controlPanelDiv.appendChild(statusPanelDiv);
 
-// Player Location
-const PLAYER_START = leaflet.latLng(
-  19.4326,
-  -99.1332,
-);
-
-// Tunable gameplay parameters
-const GAMEPLAY_ZOOM_LEVEL = 19;
-const TILE_DEGREES = 1e-4;
-const _NEIGHBORHOOD_SIZE = 10;
-const CACHE_SPAWN_PROBABILITY = 0.1;
-// When true, caches that move outside the rendered viewport will be removed
-// from the map (unrendered) but kept in the cacheStore so they can be
-// re-rendered later with their original state. When false, once a cache is
-// rendered it will remain on the map forever.
-const UNRENDER_FAR = true;
-// Extra padding (in tiles) around viewport to render so panning looks smooth.
-const RENDER_PADDING = 1;
-// Gameplay: how far (in tiles) the player can poke caches
-const POKE_RANGE = 2;
+// (Moved configuration and CacheEntry type to the top 'Config & Types' section.)
 
 // Create the map (element with id "map" is defined in index.html)
 const map = leaflet.map(mapDiv, {
@@ -144,7 +210,7 @@ mapDiv.addEventListener(
 // PageUp/PageDown pan the map by fixed pixel amounts.
 mapDiv.addEventListener("keydown", (ev: KeyboardEvent) => {
   const step = 120; // pixels per arrow press
-  // globalThis is safe in Deno and browsers; fall back to 600px if unavailable
+
   const _global = globalThis as unknown as { innerHeight?: number };
   const large = Math.round((_global.innerHeight ?? 600) * 0.5); // page scroll size
   switch (ev.key) {
@@ -175,30 +241,22 @@ mapDiv.addEventListener("keydown", (ev: KeyboardEvent) => {
     // WASD controls to move the player tile-by-tile (no clamping)
     case "w":
     case "W":
-      playerTileI = playerTileI + 1;
-      updatePlayerPosition();
-      updateCachesInView();
+      player.moveBy(1, 0);
       ev.preventDefault();
       break;
     case "s":
     case "S":
-      playerTileI = playerTileI - 1;
-      updatePlayerPosition();
-      updateCachesInView();
+      player.moveBy(-1, 0);
       ev.preventDefault();
       break;
     case "a":
     case "A":
-      playerTileJ = playerTileJ - 1;
-      updatePlayerPosition();
-      updateCachesInView();
+      player.moveBy(0, -1);
       ev.preventDefault();
       break;
     case "d":
     case "D":
-      playerTileJ = playerTileJ + 1;
-      updatePlayerPosition();
-      updateCachesInView();
+      player.moveBy(0, 1);
       ev.preventDefault();
       break;
   }
@@ -210,12 +268,6 @@ let playerTileI = 0;
 let playerTileJ = 0;
 // The player can hold a single token (value) at a time
 let heldValue: number | null = null;
-
-function _clampTile(v: number) {
-  // Allow free movement: return value unchanged. Kept as a noop so
-  // existing calls that reference clampTile don't need to be rewritten.
-  return v;
-}
 
 function updatePlayerPosition() {
   // center the player in the tile (use +0.5 to get tile center)
@@ -246,16 +298,7 @@ function updatePlayerPosition() {
   // Refresh visual state of caches so pokable ones are highlighted
   refreshAllCacheStyles();
 }
-// CacheEntry type stores generated cache state. Kept simple so entries
-// can be serialized later if desired.
-type CacheEntry = {
-  i: number;
-  j: number;
-  pointValue: number;
-  rect?: leaflet.Rectangle;
-  rendered: boolean;
-};
-
+// Cache store (type defined in Config & Types section)
 const cacheStore = new Map<string, CacheEntry>();
 
 function cellKey(i: number, j: number) {
@@ -303,15 +346,15 @@ function renderCacheEntry(entry: CacheEntry) {
     const valueSpan = popupDiv.querySelector<HTMLSpanElement>(".value")!;
 
     // initial enabled/disabled states
-    collectButton.disabled = !canPoke(entry) || entry.pointValue <= 0 ||
+    collectButton.disabled = !canInteract(entry) || entry.pointValue <= 0 ||
       heldValue !== null;
     // combine enabled when in range, player holds a value, and either the square is empty or it matches heldValue
-    combineButton.disabled = !(canPoke(entry) && heldValue !== null &&
+    combineButton.disabled = !(canInteract(entry) && heldValue !== null &&
       (entry.pointValue === 0 || heldValue === entry.pointValue));
 
     // Collect: pick up the cache's value if player holds nothing — cache becomes empty
     collectButton.addEventListener("click", () => {
-      if (!canPoke(entry) || entry.pointValue <= 0 || heldValue !== null) {
+      if (!canInteract(entry) || entry.pointValue <= 0 || heldValue !== null) {
         return;
       }
       heldValue = entry.pointValue;
@@ -327,7 +370,7 @@ function renderCacheEntry(entry: CacheEntry) {
 
     // Combine: place held value into empty square, or combine when values match
     combineButton.addEventListener("click", () => {
-      if (!canPoke(entry) || heldValue === null) return;
+      if (!canInteract(entry) || heldValue === null) return;
       // If square is empty, place held value into it
       if (entry.pointValue === 0) {
         entry.pointValue = heldValue;
@@ -361,25 +404,29 @@ function renderCacheEntry(entry: CacheEntry) {
   entry.rect = rect;
   entry.rendered = true;
 
-  // Apply initial visual state depending on whether the player can poke this cache
+  // Apply initial visual state depending on whether the player can Interact with this cache
   updateCacheVisual(entry);
 }
 
-function canPoke(entry: CacheEntry) {
-  // Use Chebyshev distance so the player can poke in a square radius
+function canInteract(entry: CacheEntry) {
+  // Use Chebyshev distance so the player can interact in a square radius
   const di = Math.abs(entry.i - playerTileI);
   const dj = Math.abs(entry.j - playerTileJ);
-  return Math.max(di, dj) <= POKE_RANGE;
+  return Math.max(di, dj) <= INTERACT_RANGE;
 }
 
 function updateCacheVisual(entry: CacheEntry) {
   if (!entry.rendered || !entry.rect) return;
 
-  const pokable = canPoke(entry);
+  const Interactable = canInteract(entry);
   // style for pokable vs non-pokable caches
-  const pokableStyle = { color: "#2b8a3e", fillColor: "#dff8e6", weight: 2 };
+  const InteractableStyle = {
+    color: "#2b8a3e",
+    fillColor: "#dff8e6",
+    weight: 2,
+  };
   const normalStyle = { color: "#3388ff", fillColor: "#cfe6ff", weight: 1 };
-  entry.rect.setStyle(pokable ? pokableStyle : normalStyle);
+  entry.rect.setStyle(Interactable ? InteractableStyle : normalStyle);
 
   // If the popup for this rect is currently open, update the collect/combine button states
   const popup = entry.rect.getPopup && entry.rect.getPopup();
@@ -393,12 +440,12 @@ function updateCacheVisual(entry: CacheEntry) {
         ".combine",
       );
       if (collectButton) {
-        collectButton.disabled = !pokable || entry.pointValue <= 0 ||
+        collectButton.disabled = !Interactable || entry.pointValue <= 0 ||
           heldValue !== null;
       }
       if (combineButton) {
         // combine allowed when pokable and player holds a value and (square empty OR values match)
-        combineButton.disabled = !(pokable && heldValue !== null &&
+        combineButton.disabled = !(Interactable && heldValue !== null &&
           (entry.pointValue === 0 || heldValue === entry.pointValue));
       }
     }
@@ -467,6 +514,27 @@ function updateCachesInView() {
   unrenderFarCaches(visible);
 }
 
+// Expose the existing cache functions via a CacheManager object so other
+// modules (or later refactors) can call a single interface. We attach the
+// implementation to `globalThis` to match the earlier `declare` usage.
+const _cacheManagerImpl: CacheManagerInterface = {
+  cacheStore,
+  cellKey,
+  renderCacheEntry,
+  ensureCacheRendered,
+  unrenderFarCaches,
+  updateCachesInView,
+  refreshAllCacheStyles,
+  updateCacheVisual,
+  canInteract,
+};
+
+(globalThis as unknown as { CacheManager?: CacheManagerInterface })
+  .CacheManager = _cacheManagerImpl;
+
+// Helper typed accessor to the manager we just attached.
+const _g = globalThis as unknown as { CacheManager?: CacheManagerInterface };
+
 // Update caches initially and whenever the map finishes panning.
-updateCachesInView();
-map.on("moveend", () => updateCachesInView());
+_g.CacheManager!.updateCachesInView();
+map.on("moveend", () => _g.CacheManager!.updateCachesInView());

@@ -27,15 +27,17 @@
 
 3.5: Added helpful UI to explain some of the controls I added to the game. [X]
 
-4:Add tokens that the player can collect (start at 0, player gets 1, finds another 1, gets 2.. ect.. up till 256)
+4:Add tokens that the player can collect (start at 0, player gets 1, finds another 1, gets 2.. ect.. up till 256) [X]
 
-4.1: make player combine tokens if matching and moving.
-4.2: make player current token go higher
+4.1: make player combine tokens if matching and moving. [X]
+4.2: make player current token go higher [X]
 
 ## D3.b: Globe-spanning gameplay
 
-Key technical challenge: Can you set up your implementation to support gameplay anywhere in the real world, not just locations near our classroom?
-Key gameplay challenge: Can players craft an even higher value token by moving to other locations to get access to additional crafting materials?
+Since I am jumping ahead of the assignment here I have already implemented playermovement in Step 4 which I thought was in D3.a So now I will use D3.b to refactor code.
+
+5: refactor ChacheEntry\
+5.1: Implement an Interface for CacheEntry & Player
 
 ## D3.c: Object persistence
 
