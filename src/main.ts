@@ -41,14 +41,22 @@ type CacheEntry = {
   rendered: boolean;
 };
 
-// Create basic UI elements
+// UI element references (created by `createUI()` below)
+let controlPanelDiv: HTMLDivElement;
+let mapDiv: HTMLDivElement;
+let statusPanelDiv: HTMLDivElement;
+let wBtn: HTMLButtonElement;
+let aBtn: HTMLButtonElement;
+let sBtn: HTMLButtonElement;
+let dBtn: HTMLButtonElement;
 
-const controlPanelDiv = document.createElement("div");
-controlPanelDiv.id = "controlPanel";
-document.body.append(controlPanelDiv);
+function createUI() {
+  controlPanelDiv = document.createElement("div");
+  controlPanelDiv.id = "controlPanel";
+  document.body.append(controlPanelDiv);
 
-// Populate the control panel with helpful instructions and on-screen buttons
-controlPanelDiv.innerHTML = `
+  // Populate the control panel with helpful instructions and on-screen buttons
+  controlPanelDiv.innerHTML = `
   <div id="controls">
     <div class="left">
       <h3>Controls</h3>
@@ -76,11 +84,31 @@ controlPanelDiv.innerHTML = `
   </div>
 `;
 
-// Hook up the control buttons to existing movement handlers
-const wBtn = document.getElementById("w-btn") as HTMLButtonElement;
-const aBtn = document.getElementById("a-btn") as HTMLButtonElement;
-const sBtn = document.getElementById("s-btn") as HTMLButtonElement;
-const dBtn = document.getElementById("d-btn") as HTMLButtonElement;
+  // Create the map container and status panel
+  mapDiv = document.createElement("div");
+  mapDiv.id = "map";
+  document.body.append(mapDiv);
+
+  statusPanelDiv = document.createElement("div");
+  statusPanelDiv.id = "statusPanel";
+  // put the status panel inside the control panel so points appear to the right
+  // of the WASD/map navigation controls instead of underneath.
+  controlPanelDiv.appendChild(statusPanelDiv);
+
+  // Hook up the control buttons to existing movement handlers
+  wBtn = document.getElementById("w-btn") as HTMLButtonElement;
+  aBtn = document.getElementById("a-btn") as HTMLButtonElement;
+  sBtn = document.getElementById("s-btn") as HTMLButtonElement;
+  dBtn = document.getElementById("d-btn") as HTMLButtonElement;
+
+  wBtn.addEventListener("click", () => movePlayerBy(1, 0));
+  aBtn.addEventListener("click", () => movePlayerBy(0, -1));
+  sBtn.addEventListener("click", () => movePlayerBy(-1, 0));
+  dBtn.addEventListener("click", () => movePlayerBy(0, 1));
+}
+
+// Build UI now
+createUI();
 
 // Simple `player` object that centralizes player actions while keeping the
 // existing global tile and held-value state for compatibility with the
@@ -144,27 +172,12 @@ function movePlayerBy(di: number, dj: number) {
   }
 }
 
-wBtn.addEventListener("click", () => movePlayerBy(1, 0));
-aBtn.addEventListener("click", () => movePlayerBy(0, -1));
-sBtn.addEventListener("click", () => movePlayerBy(-1, 0));
-dBtn.addEventListener("click", () => movePlayerBy(0, 1));
-
-// (status panel will be moved into the control panel after it's created)
-
-const mapDiv = document.createElement("div");
-mapDiv.id = "map";
-document.body.append(mapDiv);
-
-const statusPanelDiv = document.createElement("div");
-statusPanelDiv.id = "statusPanel";
-// put the status panel inside the control panel so points appear to the right
-// of the WASD/map navigation controls instead of underneath.
-controlPanelDiv.appendChild(statusPanelDiv);
+// UI elements are created by `createUI()` above.
 
 // (Moved configuration and CacheEntry type to the top 'Config & Types' section.)
 
 // Create the map (element with id "map" is defined in index.html)
-const map = leaflet.map(mapDiv, {
+const map = leaflet.map(mapDiv!, {
   center: PLAYER_START,
   zoom: GAMEPLAY_ZOOM_LEVEL,
   minZoom: GAMEPLAY_ZOOM_LEVEL,
@@ -188,13 +201,13 @@ playerMarker.addTo(map);
 
 // Make the map div focusable so keyboard controls work
 // and enable wheel-to-pan behavior (useful when zooming is fixed).
-mapDiv.tabIndex = 0;
-mapDiv.setAttribute("role", "application");
+mapDiv!.tabIndex = 0;
+mapDiv!.setAttribute("role", "application");
 
 // When the user scrolls the mouse wheel over the map, pan instead of
 // allowing the page to scroll. We prevent the default (so the page
 // doesn't move) and pan the map by the wheel delta in pixels.
-mapDiv.addEventListener(
+mapDiv!.addEventListener(
   "wheel",
   (ev: WheelEvent) => {
     ev.preventDefault();
@@ -208,7 +221,7 @@ mapDiv.addEventListener(
 
 // Keyboard navigation when the map has focus. Arrow keys and
 // PageUp/PageDown pan the map by fixed pixel amounts.
-mapDiv.addEventListener("keydown", (ev: KeyboardEvent) => {
+mapDiv!.addEventListener("keydown", (ev: KeyboardEvent) => {
   const step = 120; // pixels per arrow press
 
   const _global = globalThis as unknown as { innerHeight?: number };
@@ -331,7 +344,7 @@ function renderCacheEntry(entry: CacheEntry) {
   rect.bindPopup(() => {
     const popupDiv = document.createElement("div");
     popupDiv.innerHTML = `
-        <div>There is a cache here at "${entry.i},${entry.j}". It has value <span class="value">${entry.pointValue}</span>.</div>
+        <div>Value: <span class="value">${entry.pointValue}</span></div>
         <div class="popup-actions">
           <button class="collect">Collect</button>
           <button class="combine">Combine</button>
