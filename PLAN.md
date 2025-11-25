@@ -39,12 +39,13 @@ Since I am jumping ahead of the assignment here I have already implemented playe
 5: Refactor ChacheEntry [X]
 5.1: Implement an Interface for CacheEntry & Player [X]
 6: Refactor UI [X]
-7:
 
 ## D3.c: Object persistence
 
 Key technical challenge: Can your software accurately remember the state of map cells even when they scroll off the screen?
-Looks to be implemented properly.
+
+Looks to be implemented properly. [X]
+COMPLETED EARLY IN STEP 4
 
 Key gameplay challenge: Can you fix a gameplay bug where players can farm tokens by moving into and out of a region repeatedly to get access to fresh resources?
 
@@ -55,11 +56,13 @@ Looks to be implemented properly.
 Key technical challenges: Can your software remember game state even when the page is closed? Is the player character’s in-game movement controlled by the real-world geolocation of their device?
 Key gameplay challenge: Can the user test the game with multiple gameplay sessions, some involving real-world movement and some involving simulated movement?
 
-8: add a win condition.
+7: Change movement to be real-world geolocation of their device
 
-9: Implement a save state?
+8: Hide UI as it is no longer needed
 
-10:
+9: Implement a save state
+
+10: add a win condition. (forgot to implement if still needed)
 
 The game is played across the cells of a rectilinear latitude–longitude grid, spread out over the surface of the planet Earth.
 At the start of the game, every cell has either 1 or 0 tokens in it (but the probability of having a token or even whether that probability is constant across space is unspecified, up to the designer's creative choice).

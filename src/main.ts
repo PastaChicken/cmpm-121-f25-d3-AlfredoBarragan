@@ -49,6 +49,7 @@ let wBtn: HTMLButtonElement;
 let aBtn: HTMLButtonElement;
 let sBtn: HTMLButtonElement;
 let dBtn: HTMLButtonElement;
+let geoWatchId: number | null = null;
 
 function createUI() {
   controlPanelDiv = document.createElement("div");
@@ -105,10 +106,76 @@ function createUI() {
   aBtn.addEventListener("click", () => movePlayerBy(0, -1));
   sBtn.addEventListener("click", () => movePlayerBy(-1, 0));
   dBtn.addEventListener("click", () => movePlayerBy(0, 1));
+
+  // If the device provides geolocation, prefer that for player movement
+  // (mobile-friendly). When enabled, hide the on-screen WASD controls.
+  if ("geolocation" in navigator) {
+    const keysDiv = controlPanelDiv.querySelector<HTMLDivElement>(
+      ".keys",
+    );
+    if (keysDiv) keysDiv.style.display = "none";
+    startGeolocationControls();
+  }
 }
 
 // Build UI now
 createUI();
+
+// Start/stop geolocation-based player movement
+function startGeolocationControls() {
+  if (!("geolocation" in navigator)) return;
+  // Request high-accuracy position updates; map them to tile indices.
+  try {
+    geoWatchId = navigator.geolocation.watchPosition(
+      (pos: GeolocationPosition) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const newI = Math.floor((lat - PLAYER_START.lat) / TILE_DEGREES);
+        const newJ = Math.floor((lng - PLAYER_START.lng) / TILE_DEGREES);
+        if (newI !== playerTileI || newJ !== playerTileJ) {
+          playerTileI = newI;
+          playerTileJ = newJ;
+          updatePlayerPosition();
+          updateCachesInView();
+        }
+      },
+      (_err: GeolocationPositionError) => {
+        // If permission denied or other error, reveal controls so the user
+        // can still move manually.
+        const keysDiv = controlPanelDiv.querySelector<HTMLDivElement>(
+          ".keys",
+        );
+        if (keysDiv) keysDiv.style.display = "block";
+        const hint = controlPanelDiv.querySelector<HTMLDivElement>(
+          ".hint",
+        );
+        if (hint) {
+          hint.textContent =
+            "Geolocation unavailable — use on-screen controls or keyboard.";
+        }
+        // Stop watching if there's an unrecoverable error
+        if (geoWatchId !== null) {
+          navigator.geolocation.clearWatch(geoWatchId);
+          geoWatchId = null;
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 },
+    );
+  } catch (_e) {
+    // If the API throws, fall back to on-screen controls
+    const keysDiv = controlPanelDiv.querySelector<HTMLDivElement>(
+      ".keys",
+    );
+    if (keysDiv) keysDiv.style.display = "block";
+  }
+}
+
+function _stopGeolocationControls() {
+  if (geoWatchId !== null) {
+    navigator.geolocation.clearWatch(geoWatchId);
+    geoWatchId = null;
+  }
+}
 
 // Simple `player` object that centralizes player actions while keeping the
 // existing global tile and held-value state for compatibility with the
@@ -198,6 +265,36 @@ leaflet
 // Add a marker to represent the player (we'll keep it centered in a tile)
 const playerMarker = leaflet.marker(PLAYER_START);
 playerMarker.addTo(map);
+
+// If geolocation is available, try to place the player where they actually
+// are in the world when the app starts. We convert the real-world
+// coordinates to tile indices (relative to PLAYER_START) so the player is
+// positioned at the center of the corresponding tile.
+if ("geolocation" in navigator) {
+  try {
+    navigator.geolocation.getCurrentPosition(
+      (pos: GeolocationPosition) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const newI = Math.floor((lat - PLAYER_START.lat) / TILE_DEGREES);
+        const newJ = Math.floor((lng - PLAYER_START.lng) / TILE_DEGREES);
+        playerTileI = newI;
+        playerTileJ = newJ;
+        // updatePlayerPosition will center the player in the tile and
+        // pan the map to keep them visible.
+        updatePlayerPosition();
+        updateCachesInView();
+        refreshAllCacheStyles();
+      },
+      () => {
+        // Ignore: leave player at default start if permission denied.
+      },
+      { maximumAge: 60000, timeout: 5000 },
+    );
+  } catch {
+    // ignore errors and keep default location
+  }
+}
 
 // Make the map div focusable so keyboard controls work
 // and enable wheel-to-pan behavior (useful when zooming is fixed).
