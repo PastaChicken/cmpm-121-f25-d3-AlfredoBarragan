@@ -15,7 +15,7 @@ import luck from "./_luck.ts";
 // Config & Types
 // --------------------
 // Player/world origin (can be changed to move the world anchor)
-const PLAYER_START = leaflet.latLng(19.4326, -99.1332);
+const PLAYER_START = leaflet.latLng(0, 0);
 
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
@@ -130,14 +130,8 @@ function startGeolocationControls() {
       (pos: GeolocationPosition) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        const newI = Math.floor((lat - PLAYER_START.lat) / TILE_DEGREES);
-        const newJ = Math.floor((lng - PLAYER_START.lng) / TILE_DEGREES);
-        if (newI !== playerTileI || newJ !== playerTileJ) {
-          playerTileI = newI;
-          playerTileJ = newJ;
-          updatePlayerPosition();
-          updateCachesInView();
-        }
+        // Place player exactly at the reported coordinates and persist.
+        placePlayerAtLatLng(lat, lng);
       },
       (_err: GeolocationPositionError) => {
         // If permission denied or other error, reveal controls so the user
@@ -177,6 +171,40 @@ function _stopGeolocationControls() {
   }
 }
 
+// Place the player marker at the exact latitude/longitude reported by GPS.
+// This sets the tile indices (used for interaction range) but keeps the
+// marker at the real-world location instead of snapping to a tile center.
+function placePlayerAtLatLng(lat: number, lng: number) {
+  const latlng = leaflet.latLng(lat, lng);
+  // Compute the tile indices corresponding to this lat/lng
+  const newI = Math.floor((lat - PLAYER_START.lat) / TILE_DEGREES);
+  const newJ = Math.floor((lng - PLAYER_START.lng) / TILE_DEGREES);
+  playerTileI = newI;
+  playerTileJ = newJ;
+
+  // Place marker at the exact coordinates and update UI
+  playerMarker.setLatLng(latlng);
+  // update tooltip text
+  const tip = `You (${playerTileI},${playerTileJ})`;
+  if (playerMarker.getTooltip()) {
+    playerMarker.getTooltip()!.setContent(tip);
+  } else {
+    playerMarker.bindTooltip(tip, { permanent: false, direction: "top" });
+  }
+  // Keep player visible
+  map.panTo(latlng, { animate: false });
+
+  statusPanelDiv.innerHTML = `Held: ${
+    heldValue ?? "None"
+  } — pos (${playerTileI},${playerTileJ})`;
+
+  // Update caches based on the player's tile location
+  updateCachesInView();
+  refreshAllCacheStyles();
+  // persist location/state
+  saveState();
+}
+
 // Simple `player` object that centralizes player actions while keeping the
 // existing global tile and held-value state for compatibility with the
 // rest of the module. Methods delegate to the legacy globals (so this
@@ -200,6 +228,7 @@ const player: Player = {
     playerTileJ = playerTileJ + dj;
     updatePlayerPosition();
     updateCachesInView();
+    saveState();
   },
   updatePosition() {
     updatePlayerPosition();
@@ -207,6 +236,7 @@ const player: Player = {
   setHeld(value: number | null) {
     heldValue = value;
     updatePlayerPosition();
+    saveState();
   },
   updateUI() {
     statusPanelDiv.innerHTML = `Held: ${
@@ -276,15 +306,7 @@ if ("geolocation" in navigator) {
       (pos: GeolocationPosition) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        const newI = Math.floor((lat - PLAYER_START.lat) / TILE_DEGREES);
-        const newJ = Math.floor((lng - PLAYER_START.lng) / TILE_DEGREES);
-        playerTileI = newI;
-        playerTileJ = newJ;
-        // updatePlayerPosition will center the player in the tile and
-        // pan the map to keep them visible.
-        updatePlayerPosition();
-        updateCachesInView();
-        refreshAllCacheStyles();
+        placePlayerAtLatLng(lat, lng);
       },
       () => {
         // Ignore: leave player at default start if permission denied.
@@ -476,6 +498,8 @@ function renderCacheEntry(entry: CacheEntry) {
         `Held: ${heldValue} — pos (${playerTileI},${playerTileJ})`;
       // refresh visuals so combine availability updates
       refreshAllCacheStyles();
+      // persist state after a change
+      saveState();
     });
 
     // Combine: place held value into empty square, or combine when values match
@@ -491,6 +515,8 @@ function renderCacheEntry(entry: CacheEntry) {
           heldValue ?? "None"
         } — pos (${playerTileI},${playerTileJ})`;
         refreshAllCacheStyles();
+        // persist state after a change
+        saveState();
         return;
       }
 
@@ -506,6 +532,8 @@ function renderCacheEntry(entry: CacheEntry) {
         heldValue ?? "None"
       } — pos (${playerTileI},${playerTileJ})`;
       refreshAllCacheStyles();
+      // persist state after a change
+      saveState();
     });
 
     return popupDiv;
@@ -645,6 +673,91 @@ const _cacheManagerImpl: CacheManagerInterface = {
 // Helper typed accessor to the manager we just attached.
 const _g = globalThis as unknown as { CacheManager?: CacheManagerInterface };
 
+// --- Save / Load State (localStorage) ---------------------------------
+const STATE_KEY = "cachegame_state_v1";
+
+function saveState() {
+  try {
+    const caches: Array<{ i: number; j: number; pointValue: number }> = [];
+    for (const entry of cacheStore.values()) {
+      caches.push({ i: entry.i, j: entry.j, pointValue: entry.pointValue });
+    }
+    const payload = {
+      playerTileI,
+      playerTileJ,
+      heldValue,
+      caches,
+      ts: Date.now(),
+    };
+    localStorage.setItem(STATE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as {
+      playerTileI?: number;
+      playerTileJ?: number;
+      heldValue?: number | null;
+      caches?: Array<{ i: number; j: number; pointValue: number }>;
+    };
+    if (typeof parsed.playerTileI === "number") {
+      playerTileI = parsed.playerTileI;
+    }
+    if (typeof parsed.playerTileJ === "number") {
+      playerTileJ = parsed.playerTileJ;
+    }
+    if (typeof parsed.heldValue !== "undefined") heldValue = parsed.heldValue;
+
+    if (parsed.caches && Array.isArray(parsed.caches)) {
+      for (const c of parsed.caches) {
+        const key = cellKey(c.i, c.j);
+        // preserve existing entries but overwrite if saved
+        cacheStore.set(key, {
+          i: c.i,
+          j: c.j,
+          pointValue: c.pointValue,
+          rendered: false,
+        });
+      }
+    }
+
+    // update UI to reflect loaded player state
+    statusPanelDiv.innerHTML = `Held: ${
+      heldValue ?? "None"
+    } — pos (${playerTileI},${playerTileJ})`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function _clearSavedState() {
+  try {
+    localStorage.removeItem(STATE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+// Load saved state (if present) before the initial render so caches are
+// available immediately. If geolocation overwrites player position later,
+// that's expected.
+loadState();
+
 // Update caches initially and whenever the map finishes panning.
 _g.CacheManager!.updateCachesInView();
 map.on("moveend", () => _g.CacheManager!.updateCachesInView());
+
+// Autosave on unload so progress isn't lost when the tab closes.
+globalThis.addEventListener("beforeunload", () => {
+  try {
+    saveState();
+  } catch {
+    // ignore
+  }
+});

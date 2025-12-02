@@ -54,7 +54,7 @@
   gap: 12px;
   align-items: flex-start;
   min-width: 280px;
-  max-width: 680px;
+  max-width: 100px;
 }
 
 #controlPanel h3 {
