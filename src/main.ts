@@ -79,8 +79,10 @@ const CONFIG = {
     initialPositionOptions: { maximumAge: 60000, timeout: 5000 },
   },
 };
-// Player/world origin (can be changed to move the world anchor)
-const PLAYER_START = leaflet.latLng(0, 0);
+// Player/world origin (can be changed to move the world anchor). This is
+// mutable so we can re-anchor the world (for example when starting a new
+// game so the player's current location becomes the new origin).
+let PLAYER_START = leaflet.latLng(0, 0);
 
 //========== Tunable gameplay parameters (derived from CONFIG) =============
 const GAMEPLAY_ZOOM_LEVEL = CONFIG.map.zoomLevel;
@@ -149,6 +151,9 @@ function createUI() {
           <li>Arrow keys: small pan steps</li>
           <li>PageUp / PageDown: larger pan steps</li>
         </ul>
+        <div style="margin-top:0.6rem">
+          <button id="new-game-btn">New Game</button>
+        </div>
       </div>
     </div>
   </div>
@@ -208,6 +213,17 @@ function createUI() {
 
 // Build UI now
 createUI();
+
+// Wire up the New Game button (resets progress). Placed here so DOM
+// elements created by `createUI()` are available.
+const newGameBtn = document.getElementById("new-game-btn") as
+  | HTMLButtonElement
+  | null;
+if (newGameBtn) {
+  newGameBtn.addEventListener("click", () => {
+    startNewGame();
+  });
+}
 
 // Start/stop geolocation-based player movement
 function startGeolocationControls() {
@@ -839,6 +855,62 @@ function _clearSavedState() {
     localStorage.removeItem(STATE_KEY);
   } catch {
     // ignore
+  }
+}
+
+// Reset the game state: clear saved state, remove rendered cache rectangles,
+// reset player position/held value, and refresh map visuals. This intentionally
+// asks for confirmation to avoid accidental data loss.
+function startNewGame() {
+  try {
+    if (typeof globalThis.confirm === "function") {
+      const ok = globalThis.confirm(
+        "Start a new game? This will erase saved progress and reset the map.",
+      );
+      if (!ok) return;
+    }
+
+    // Clear persisted state
+    _clearSavedState();
+
+    // Remove rendered rectangles from the map
+    for (const entry of cacheStore.values()) {
+      if (entry.rect) {
+        try {
+          entry.rect.remove();
+        } catch (_e) {
+          // ignore individual failures
+        }
+      }
+    }
+    // Clear the in-memory cache store
+    cacheStore.clear();
+
+    // Re-anchor the world so the player's current geographic location becomes
+    // the new tile origin (tile 0,0). This keeps the player visually in the
+    // same spot while making their current location the starting anchor.
+    const markerLatLng = playerMarker.getLatLng();
+    // PLAYER_START should be set so that tile (0,0) centers at the player's
+    // current marker position. updatePlayerPosition places the player at
+    // PLAYER_START + (tile + 0.5) * TILE_DEGREES, so invert that here.
+    PLAYER_START = leaflet.latLng(
+      markerLatLng.lat - 0.5 * TILE_DEGREES,
+      markerLatLng.lng - 0.5 * TILE_DEGREES,
+    );
+
+    // Reset logical tile coordinates and held value to start fresh
+    player.tileI = 0;
+    player.tileJ = 0;
+    player.heldValue = null;
+
+    // Update UI and regenerate visible caches
+    updatePlayerPosition();
+    _g.CacheManager!.updateCachesInView();
+    refreshAllCacheStyles();
+  } catch (e) {
+    // Surface a debug message but don't throw
+    // eslint-disable-next-line no-console
+    console.warn("startNewGame failed:", e);
   }
 }
 
