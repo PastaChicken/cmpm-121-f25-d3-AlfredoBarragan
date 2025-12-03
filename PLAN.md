@@ -58,11 +58,13 @@ Key gameplay challenge: Can the user test the game with multiple gameplay sessio
 
 7: Change movement to be real-world geolocation of their device
 
-8: Hide UI as it is no longer needed
+8: Implement testing Save state [X]
 
-9: Implement a save state
+9: Implement a way to start a new game [X]
 
-10: add a win condition. (forgot to implement if still needed)
+10: Create an option to toggle between GPS based movement and button Movement
+
+11: add a win condition. (forgot to implement if still needed)
 
 The game is played across the cells of a rectilinear latitude–longitude grid, spread out over the surface of the planet Earth.
 At the start of the game, every cell has either 1 or 0 tokens in it (but the probability of having a token or even whether that probability is constant across space is unspecified, up to the designer's creative choice).

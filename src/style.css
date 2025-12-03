@@ -54,7 +54,7 @@
   gap: 12px;
   align-items: flex-start;
   min-width: 280px;
-  max-width: 100px;
+  max-width: 480px;
 }
 
 #controlPanel h3 {
@@ -63,16 +63,18 @@
 }
 
 .keys {
-  display: flex;
-  flex-direction: column;
+  /* Grid layout: W centered above the A S D row */
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  grid-auto-rows: 44px;
+  gap: 6px 8px;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
 }
 
 .keys .key {
   width: 44px;
   height: 44px;
-  margin: 0 6px;
   border-radius: 6px;
   border: 1px solid rgba(0, 0, 0, 0.12);
   background: #fff;
@@ -81,8 +83,18 @@
   cursor: pointer;
 }
 
+/* Place the W key in the center column (first child button) */
+.keys > button.key:first-child {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* Make the container holding A/S/D span all three columns and center its children */
 .keys > div {
+  grid-column: 1 / span 3;
+  grid-row: 2;
   display: flex;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -135,4 +147,18 @@
   #statusPanel {
     width: 100%;
   }
+}
+
+/* Temporary helper to hide on-screen UI for mobile GPS testing.
+   Add `?hide_ui=1` or `?hide_ui=true` to the page URL to enable. */
+body.hide-ui-testing #controlPanel,
+body.hide-ui-testing #statusPanel,
+body.hide-ui-testing .leaflet-control-container,
+body.hide-ui-testing .leaflet-control-attribution {
+  display: none !important;
+}
+
+/* Ensure the map occupies full viewport height when UI is hidden */
+body.hide-ui-testing #map {
+  height: 100vh !important;
 }

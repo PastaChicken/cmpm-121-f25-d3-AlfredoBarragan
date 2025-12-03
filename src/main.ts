@@ -5,6 +5,22 @@ import leaflet from "leaflet";
 import "leaflet/dist/leaflet.css"; // supporting style for Leaflet
 import "./style.css"; // student-controlled page style
 
+// If the developer wants to temporarily hide the UI for mobile GPS testing
+// they can append `?hide_ui=1` (or `?hide_ui=true`) to the page URL. This
+// adds a class to the body that the stylesheet uses to hide UI chrome.
+try {
+  const loc = (globalThis as unknown as { location?: Location }).location;
+  if (loc) {
+    const params = new URLSearchParams(loc.search);
+    const v = params.get("hide_ui");
+    if (v === "1" || v === "true") {
+      document.body.classList.add("hide-ui-testing");
+    }
+  }
+} catch (_e) {
+  // ignore if URLSearchParams/location not available in some environments
+}
+
 // Fix missing marker images
 import "./_leafletWorkaround.ts"; // fixes for missing Leaflet images
 
@@ -17,7 +33,7 @@ import luck from "./_luck.ts";
 // Player/world origin (can be changed to move the world anchor)
 const PLAYER_START = leaflet.latLng(0, 0);
 
-// Tunable gameplay parameters
+//========== Tunable gameplay parameters=============
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
 const CACHE_SPAWN_PROBABILITY = 0.1;
@@ -29,7 +45,7 @@ const UNRENDER_FAR = true;
 // Extra padding (in tiles) around viewport to render so panning looks smooth.
 const RENDER_PADDING = 1;
 // Gameplay: how far (in tiles) the player can act on caches
-const INTERACT_RANGE = 2;
+const INTERACT_RANGE = 3;
 
 // CacheEntry type stores generated cache state. Kept simple so entries
 // can be serialized later if desired.
@@ -50,6 +66,7 @@ let aBtn: HTMLButtonElement;
 let sBtn: HTMLButtonElement;
 let dBtn: HTMLButtonElement;
 let geoWatchId: number | null = null;
+let gpsToggle: HTMLInputElement;
 
 function createUI() {
   controlPanelDiv = document.createElement("div");
@@ -70,6 +87,9 @@ function createUI() {
         </div>
       </div>
       <div class="hint">Click a square to open a cache, then use <strong>Collect</strong> to pick it up or <strong>Combine</strong> to merge matching values.</div>
+      <div class="gps-toggle">
+        <label><input id="gps-toggle" type="checkbox"> Use GPS</label>
+      </div>
     </div>
     <div class="right">
       <h3>Map Navigation</h3>
@@ -107,15 +127,34 @@ function createUI() {
   sBtn.addEventListener("click", () => movePlayerBy(-1, 0));
   dBtn.addEventListener("click", () => movePlayerBy(0, 1));
 
-  // If the device provides geolocation, prefer that for player movement
-  // (mobile-friendly). When enabled, hide the on-screen WASD controls.
+  // Wire GPS toggle (if the device supports geolocation). The toggle lets
+  // players choose between GPS-driven movement and manual on-screen keys.
+  gpsToggle = document.getElementById("gps-toggle") as HTMLInputElement;
+  const keysDiv = controlPanelDiv.querySelector<HTMLDivElement>(".keys");
   if ("geolocation" in navigator) {
-    const keysDiv = controlPanelDiv.querySelector<HTMLDivElement>(
-      ".keys",
-    );
+    gpsToggle.disabled = false;
+    // Default: enable GPS if available
+    gpsToggle.checked = true;
     if (keysDiv) keysDiv.style.display = "none";
     startGeolocationControls();
+  } else {
+    // No GPS available: disable the toggle and keep keys visible
+    gpsToggle.disabled = true;
+    gpsToggle.checked = false;
+    if (keysDiv) keysDiv.style.display = "block";
   }
+
+  gpsToggle.addEventListener("change", () => {
+    if (gpsToggle.checked) {
+      // hide manual keys and start GPS
+      if (keysDiv) keysDiv.style.display = "none";
+      startGeolocationControls();
+    } else {
+      // show manual keys and stop GPS
+      if (keysDiv) keysDiv.style.display = "block";
+      _stopGeolocationControls();
+    }
+  });
 }
 
 // Build UI now
@@ -207,8 +246,8 @@ function placePlayerAtLatLng(lat: number, lng: number) {
 
 // Simple `player` object that centralizes player actions while keeping the
 // existing global tile and held-value state for compatibility with the
-// rest of the module. Methods delegate to the legacy globals (so this
-// change is incremental and low-risk).
+// rest of the module.
+
 interface Player {
   tileI: number;
   tileJ: number;
