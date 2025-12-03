@@ -62,7 +62,7 @@ Key gameplay challenge: Can the user test the game with multiple gameplay sessio
 
 9: Implement a way to start a new game [X]
 
-10: Create an option to toggle between GPS based movement and button Movement
+10: Create an option to toggle between GPS based movement and button Movement [X]
 
 11: add a win condition. (forgot to implement if still needed)
 

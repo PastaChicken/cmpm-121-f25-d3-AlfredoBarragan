@@ -218,13 +218,13 @@ function placePlayerAtLatLng(lat: number, lng: number) {
   // Compute the tile indices corresponding to this lat/lng
   const newI = Math.floor((lat - PLAYER_START.lat) / TILE_DEGREES);
   const newJ = Math.floor((lng - PLAYER_START.lng) / TILE_DEGREES);
-  playerTileI = newI;
-  playerTileJ = newJ;
+  player.tileI = newI;
+  player.tileJ = newJ;
 
   // Place marker at the exact coordinates and update UI
   playerMarker.setLatLng(latlng);
   // update tooltip text
-  const tip = `You (${playerTileI},${playerTileJ})`;
+  const tip = `You (${player.tileI},${player.tileJ})`;
   if (playerMarker.getTooltip()) {
     playerMarker.getTooltip()!.setContent(tip);
   } else {
@@ -234,8 +234,8 @@ function placePlayerAtLatLng(lat: number, lng: number) {
   map.panTo(latlng, { animate: false });
 
   statusPanelDiv.innerHTML = `Held: ${
-    heldValue ?? "None"
-  } — pos (${playerTileI},${playerTileJ})`;
+    player.heldValue ?? "None"
+  } — pos (${player.tileI},${player.tileJ})`;
 
   // Update caches based on the player's tile location
   updateCachesInView();
@@ -263,8 +263,8 @@ const player: Player = {
   tileJ: 0,
   heldValue: null,
   moveBy(di: number, dj: number) {
-    playerTileI = playerTileI + di;
-    playerTileJ = playerTileJ + dj;
+    this.tileI = this.tileI + di;
+    this.tileJ = this.tileJ + dj;
     updatePlayerPosition();
     updateCachesInView();
     saveState();
@@ -273,14 +273,14 @@ const player: Player = {
     updatePlayerPosition();
   },
   setHeld(value: number | null) {
-    heldValue = value;
+    this.heldValue = value;
     updatePlayerPosition();
     saveState();
   },
   updateUI() {
     statusPanelDiv.innerHTML = `Held: ${
-      heldValue ?? "None"
-    } — pos (${playerTileI},${playerTileJ})`;
+      this.heldValue ?? "None"
+    } — pos (${this.tileI},${this.tileJ})`;
   },
 };
 
@@ -433,22 +433,20 @@ mapDiv!.addEventListener("keydown", (ev: KeyboardEvent) => {
   }
 });
 
-// Display the player's points and tile position
-// Player tile coordinates relative to CLASSROOM_LATLNG (i -> latitude, j -> longitude)
-let playerTileI = 0;
-let playerTileJ = 0;
-// The player can hold a single token (value) at a time
-let heldValue: number | null = null;
+// Player tile coordinates and held value are stored on the `player`
+// object (single source of truth). The `player` object is defined below
+// and initialized with defaults so other functions use `player.tileI`,
+// `player.tileJ`, and `player.heldValue` instead of scattered globals.
 
 function updatePlayerPosition() {
   // center the player in the tile (use +0.5 to get tile center)
-  const lat = PLAYER_START.lat + (playerTileI + 0.5) * TILE_DEGREES;
-  const lng = PLAYER_START.lng + (playerTileJ + 0.5) * TILE_DEGREES;
+  const lat = PLAYER_START.lat + (player.tileI + 0.5) * TILE_DEGREES;
+  const lng = PLAYER_START.lng + (player.tileJ + 0.5) * TILE_DEGREES;
   const latlng = leaflet.latLng(lat, lng);
 
   playerMarker.setLatLng(latlng);
   // update tooltip to show coords and optionally points
-  const tip = `You (${playerTileI},${playerTileJ})`;
+  const tip = `You (${player.tileI},${player.tileJ})`;
   // create or update tooltip content
   if (playerMarker.getTooltip()) {
     playerMarker.getTooltip()!.setContent(tip);
@@ -460,8 +458,8 @@ function updatePlayerPosition() {
   map.panTo(latlng, { animate: false });
 
   statusPanelDiv.innerHTML = `Held: ${
-    heldValue ?? "None"
-  } — pos (${playerTileI},${playerTileJ})`;
+    player.heldValue ?? "None"
+  } — pos (${player.tileI},${player.tileJ})`;
 
   // Generate/update caches for the current view so tiles near the player exist
   // immediately after movement.
@@ -518,23 +516,27 @@ function renderCacheEntry(entry: CacheEntry) {
 
     // initial enabled/disabled states
     collectButton.disabled = !canInteract(entry) || entry.pointValue <= 0 ||
-      heldValue !== null;
+      player.heldValue !== null;
     // combine enabled when in range, player holds a value, and either the square is empty or it matches heldValue
-    combineButton.disabled = !(canInteract(entry) && heldValue !== null &&
-      (entry.pointValue === 0 || heldValue === entry.pointValue));
+    combineButton.disabled =
+      !(canInteract(entry) && player.heldValue !== null &&
+        (entry.pointValue === 0 || player.heldValue === entry.pointValue));
 
     // Collect: pick up the cache's value if player holds nothing — cache becomes empty
     collectButton.addEventListener("click", () => {
-      if (!canInteract(entry) || entry.pointValue <= 0 || heldValue !== null) {
+      if (
+        !canInteract(entry) || entry.pointValue <= 0 ||
+        player.heldValue !== null
+      ) {
         return;
       }
-      heldValue = entry.pointValue;
+      player.heldValue = entry.pointValue;
       entry.pointValue = 0;
       valueSpan.innerHTML = entry.pointValue.toString();
       rect.getTooltip()?.setContent(entry.pointValue.toString());
       // update status
       statusPanelDiv.innerHTML =
-        `Held: ${heldValue} — pos (${playerTileI},${playerTileJ})`;
+        `Held: ${player.heldValue} — pos (${player.tileI},${player.tileJ})`;
       // refresh visuals so combine availability updates
       refreshAllCacheStyles();
       // persist state after a change
@@ -543,16 +545,16 @@ function renderCacheEntry(entry: CacheEntry) {
 
     // Combine: place held value into empty square, or combine when values match
     combineButton.addEventListener("click", () => {
-      if (!canInteract(entry) || heldValue === null) return;
+      if (!canInteract(entry) || player.heldValue === null) return;
       // If square is empty, place held value into it
       if (entry.pointValue === 0) {
-        entry.pointValue = heldValue;
-        heldValue = null;
+        entry.pointValue = player.heldValue;
+        player.heldValue = null;
         valueSpan.innerHTML = entry.pointValue.toString();
         rect.getTooltip()?.setContent(entry.pointValue.toString());
         statusPanelDiv.innerHTML = `Held: ${
-          heldValue ?? "None"
-        } — pos (${playerTileI},${playerTileJ})`;
+          player.heldValue ?? "None"
+        } — pos (${player.tileI},${player.tileJ})`;
         refreshAllCacheStyles();
         // persist state after a change
         saveState();
@@ -560,16 +562,16 @@ function renderCacheEntry(entry: CacheEntry) {
       }
 
       // Otherwise only allow combining when held value equals square value
-      if (heldValue !== entry.pointValue) return;
-      const newVal = heldValue + entry.pointValue;
+      if (player.heldValue !== entry.pointValue) return;
+      const newVal = player.heldValue + entry.pointValue;
       entry.pointValue = newVal;
       // clear player's held token
-      heldValue = null;
+      player.heldValue = null;
       valueSpan.innerHTML = entry.pointValue.toString();
       rect.getTooltip()?.setContent(entry.pointValue.toString());
       statusPanelDiv.innerHTML = `Held: ${
-        heldValue ?? "None"
-      } — pos (${playerTileI},${playerTileJ})`;
+        player.heldValue ?? "None"
+      } — pos (${player.tileI},${player.tileJ})`;
       refreshAllCacheStyles();
       // persist state after a change
       saveState();
@@ -587,8 +589,8 @@ function renderCacheEntry(entry: CacheEntry) {
 
 function canInteract(entry: CacheEntry) {
   // Use Chebyshev distance so the player can interact in a square radius
-  const di = Math.abs(entry.i - playerTileI);
-  const dj = Math.abs(entry.j - playerTileJ);
+  const di = Math.abs(entry.i - player.tileI);
+  const dj = Math.abs(entry.j - player.tileJ);
   return Math.max(di, dj) <= INTERACT_RANGE;
 }
 
@@ -618,12 +620,12 @@ function updateCacheVisual(entry: CacheEntry) {
       );
       if (collectButton) {
         collectButton.disabled = !Interactable || entry.pointValue <= 0 ||
-          heldValue !== null;
+          player.heldValue !== null;
       }
       if (combineButton) {
         // combine allowed when pokable and player holds a value and (square empty OR values match)
-        combineButton.disabled = !(Interactable && heldValue !== null &&
-          (entry.pointValue === 0 || heldValue === entry.pointValue));
+        combineButton.disabled = !(Interactable && player.heldValue !== null &&
+          (entry.pointValue === 0 || player.heldValue === entry.pointValue));
       }
     }
   }
@@ -722,9 +724,10 @@ function saveState() {
       caches.push({ i: entry.i, j: entry.j, pointValue: entry.pointValue });
     }
     const payload = {
-      playerTileI,
-      playerTileJ,
-      heldValue,
+      // Keep legacy key names so previously-saved state remains compatible
+      playerTileI: player.tileI,
+      playerTileJ: player.tileJ,
+      heldValue: player.heldValue,
       caches,
       ts: Date.now(),
     };
@@ -745,12 +748,14 @@ function loadState() {
       caches?: Array<{ i: number; j: number; pointValue: number }>;
     };
     if (typeof parsed.playerTileI === "number") {
-      playerTileI = parsed.playerTileI;
+      player.tileI = parsed.playerTileI;
     }
     if (typeof parsed.playerTileJ === "number") {
-      playerTileJ = parsed.playerTileJ;
+      player.tileJ = parsed.playerTileJ;
     }
-    if (typeof parsed.heldValue !== "undefined") heldValue = parsed.heldValue;
+    if (typeof parsed.heldValue !== "undefined") {
+      player.heldValue = parsed.heldValue;
+    }
 
     if (parsed.caches && Array.isArray(parsed.caches)) {
       for (const c of parsed.caches) {
@@ -767,8 +772,8 @@ function loadState() {
 
     // update UI to reflect loaded player state
     statusPanelDiv.innerHTML = `Held: ${
-      heldValue ?? "None"
-    } — pos (${playerTileI},${playerTileJ})`;
+      player.heldValue ?? "None"
+    } — pos (${player.tileI},${player.tileJ})`;
     return true;
   } catch {
     return false;
