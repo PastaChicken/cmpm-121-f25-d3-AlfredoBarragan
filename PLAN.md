@@ -64,7 +64,7 @@ Key gameplay challenge: Can the user test the game with multiple gameplay sessio
 
 10: Create an option to toggle between GPS based movement and button Movement [X]
 
-11: add a win condition. (forgot to implement if still needed)
+11: add a win condition. (forgot to implement if still needed) [X]
 
 The game is played across the cells of a rectilinear latitude–longitude grid, spread out over the surface of the planet Earth.
 At the start of the game, every cell has either 1 or 0 tokens in it (but the probability of having a token or even whether that probability is constant across space is unspecified, up to the designer's creative choice).

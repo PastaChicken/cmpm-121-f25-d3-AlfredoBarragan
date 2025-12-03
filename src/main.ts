@@ -341,6 +341,8 @@ const player: Player = {
     this.heldValue = value;
     updatePlayerPosition();
     saveState();
+    // Check win condition whenever the player's held value changes
+    checkWinCondition();
   },
   updateUI() {
     statusPanelDiv.innerHTML = `Held: ${
@@ -597,17 +599,14 @@ function renderCacheEntry(entry: CacheEntry) {
       ) {
         return;
       }
-      player.heldValue = entry.pointValue;
+      // Use the player API so side-effects (UI update, save, win check)
+      // happen consistently.
+      player.setHeld(entry.pointValue);
       entry.pointValue = 0;
       valueSpan.innerHTML = entry.pointValue.toString();
       rect.getTooltip()?.setContent(entry.pointValue.toString());
-      // update status
-      statusPanelDiv.innerHTML =
-        `Held: ${player.heldValue} — pos (${player.tileI},${player.tileJ})`;
       // refresh visuals so combine availability updates
       refreshAllCacheStyles();
-      // persist state after a change
-      saveState();
     });
 
     // Combine: place held value into empty square, or combine when values match
@@ -615,25 +614,21 @@ function renderCacheEntry(entry: CacheEntry) {
       if (!canInteract(entry) || player.heldValue === null) return;
       // If square is empty, place held value into it
       if (entry.pointValue === 0) {
-        entry.pointValue = player.heldValue;
-        player.heldValue = null;
+        // Move the held value into the empty square and clear player's held value
+        entry.pointValue = player.heldValue!;
+        player.setHeld(null);
         valueSpan.innerHTML = entry.pointValue.toString();
         rect.getTooltip()?.setContent(entry.pointValue.toString());
-        statusPanelDiv.innerHTML = `Held: ${
-          player.heldValue ?? "None"
-        } — pos (${player.tileI},${player.tileJ})`;
         refreshAllCacheStyles();
-        // persist state after a change
-        saveState();
         return;
       }
 
       // Otherwise only allow combining when held value equals square value
       if (player.heldValue !== entry.pointValue) return;
-      const newVal = player.heldValue + entry.pointValue;
+      const newVal = player.heldValue! + entry.pointValue;
       entry.pointValue = newVal;
       // clear player's held token
-      player.heldValue = null;
+      player.setHeld(null);
       valueSpan.innerHTML = entry.pointValue.toString();
       rect.getTooltip()?.setContent(entry.pointValue.toString());
       statusPanelDiv.innerHTML = `Held: ${
@@ -855,6 +850,31 @@ function _clearSavedState() {
     localStorage.removeItem(STATE_KEY);
   } catch {
     // ignore
+  }
+}
+
+// Check whether the player holds the winning value and prompt restart.
+function checkWinCondition() {
+  try {
+    if (player.heldValue === 256) {
+      // Small timeout so UI updates (tooltip/status) appear before the dialog.
+      setTimeout(() => {
+        const msg = "Game over — You win! Start a new game?";
+        if (typeof globalThis.confirm === "function") {
+          const restart = globalThis.confirm(msg);
+          if (restart) startNewGame();
+        } else {
+          // Fallback: alert then start new game
+          if (typeof globalThis.alert === "function") {
+            globalThis.alert(msg);
+          }
+          startNewGame();
+        }
+      }, 20);
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("checkWinCondition failed:", e);
   }
 }
 
