@@ -56,7 +56,7 @@ Looks to be implemented properly.
 Key technical challenges: Can your software remember game state even when the page is closed? Is the player character’s in-game movement controlled by the real-world geolocation of their device?
 Key gameplay challenge: Can the user test the game with multiple gameplay sessions, some involving real-world movement and some involving simulated movement?
 
-7: Change movement to be real-world geolocation of their device
+7: Change movement to be real-world geolocation of their device [X] Implemnted and tested Is working on Phone need to clean up UI however
 
 8: Implement testing Save state [X]
 

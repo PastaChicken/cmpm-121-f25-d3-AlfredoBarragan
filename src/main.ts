@@ -30,22 +30,71 @@ import luck from "./_luck.ts";
 // --------------------
 // Config & Types
 // --------------------
+// Centralized configuration to avoid scattered magic numbers. Grouped so
+// it's clear what each value represents (units and intent) and easy to
+// adjust for testing or tuning.
+const CONFIG = {
+  map: {
+    // Leaflet zoom level used to render the gameplay area. Higher values
+    // show more detailed map tiles (19 is near-street-level).
+    zoomLevel: 19,
+  },
+  // Tile/geospatial settings. `tileDegrees` is the lat/lng span of a single
+  // logical tile in degrees (used to convert real coordinates to tile
+  // indices). 1e-4 (~0.0001°) is roughly 11 meters at the equator.
+  tile: {
+    degrees: 1e-4,
+  },
+  spawn: {
+    // Probability a tile will contain a cache when first considered.
+    probability: 0.1,
+    // Multiplier used when generating an initial point value (integer).
+    initialValueMultiplier: 2,
+  },
+  render: {
+    // When true, cache rectangles outside the viewport are removed from
+    // the map but kept in memory so they can be re-rendered later.
+    unrenderFar: true,
+    // Extra padding (in tiles) around viewport to render so panning looks smooth.
+    padding: 1,
+  },
+  gameplay: {
+    // How many tiles away (Chebyshev distance) the player can interact.
+    interactRange: 3,
+  },
+  nav: {
+    // Keyboard pan step (pixels) for arrow keys.
+    keyPanStep: 120,
+    // Fraction of viewport height used for PageUp/PageDown large pans.
+    largePanFraction: 0.5,
+  },
+  geo: {
+    // Geolocation watch options for continuous tracking
+    watchOptions: {
+      enableHighAccuracy: true,
+      maximumAge: 1000,
+      timeout: 10000,
+    },
+    // Initial one-shot position lookup options (used at startup)
+    initialPositionOptions: { maximumAge: 60000, timeout: 5000 },
+  },
+};
 // Player/world origin (can be changed to move the world anchor)
 const PLAYER_START = leaflet.latLng(0, 0);
 
-//========== Tunable gameplay parameters=============
-const GAMEPLAY_ZOOM_LEVEL = 19;
-const TILE_DEGREES = 1e-4;
-const CACHE_SPAWN_PROBABILITY = 0.1;
+//========== Tunable gameplay parameters (derived from CONFIG) =============
+const GAMEPLAY_ZOOM_LEVEL = CONFIG.map.zoomLevel;
+const TILE_DEGREES = CONFIG.tile.degrees;
+const CACHE_SPAWN_PROBABILITY = CONFIG.spawn.probability;
 // When true, caches that move outside the rendered viewport will be removed
 // from the map (unrendered) but kept in the cacheStore so they can be
 // re-rendered later with their original state. When false, once a cache is
 // rendered it will remain on the map forever.
-const UNRENDER_FAR = true;
+const UNRENDER_FAR = CONFIG.render.unrenderFar;
 // Extra padding (in tiles) around viewport to render so panning looks smooth.
-const RENDER_PADDING = 1;
+const RENDER_PADDING = CONFIG.render.padding;
 // Gameplay: how far (in tiles) the player can act on caches
-const INTERACT_RANGE = 3;
+const INTERACT_RANGE = CONFIG.gameplay.interactRange;
 
 // CacheEntry type stores generated cache state. Kept simple so entries
 // can be serialized later if desired.
@@ -192,7 +241,7 @@ function startGeolocationControls() {
           geoWatchId = null;
         }
       },
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 },
+      CONFIG.geo.watchOptions,
     );
   } catch (_e) {
     // If the API throws, fall back to on-screen controls
@@ -350,7 +399,7 @@ if ("geolocation" in navigator) {
       () => {
         // Ignore: leave player at default start if permission denied.
       },
-      { maximumAge: 60000, timeout: 5000 },
+      CONFIG.geo.initialPositionOptions,
     );
   } catch {
     // ignore errors and keep default location
@@ -380,10 +429,12 @@ mapDiv!.addEventListener(
 // Keyboard navigation when the map has focus. Arrow keys and
 // PageUp/PageDown pan the map by fixed pixel amounts.
 mapDiv!.addEventListener("keydown", (ev: KeyboardEvent) => {
-  const step = 120; // pixels per arrow press
+  const step = CONFIG.nav.keyPanStep; // pixels per arrow press
 
   const _global = globalThis as unknown as { innerHeight?: number };
-  const large = Math.round((_global.innerHeight ?? 600) * 0.5); // page scroll size
+  const large = Math.round(
+    (_global.innerHeight ?? 600) * CONFIG.nav.largePanFraction,
+  ); // page scroll size
   switch (ev.key) {
     case "ArrowUp":
       map.panBy([0, -step]);
@@ -648,7 +699,10 @@ function ensureCacheRendered(i: number, j: number) {
 
   // If no cache entry exists for this cell, decide whether to spawn one
   if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-    const pointValue = Math.floor(luck([i, j, "initialValue"].toString()) * 2);
+    const pointValue = Math.floor(
+      luck([i, j, "initialValue"].toString()) *
+        CONFIG.spawn.initialValueMultiplier,
+    );
     const entry: CacheEntry = { i, j, pointValue, rendered: false };
     cacheStore.set(key, entry);
     renderCacheEntry(entry);
