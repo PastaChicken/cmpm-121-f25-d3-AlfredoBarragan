@@ -47,7 +47,7 @@ const CONFIG = {
   },
   spawn: {
     // Probability a tile will contain a cache when first considered.
-    probability: 0.1,
+    probability: 0.3,
     // Multiplier used when generating an initial point value (integer).
     initialValueMultiplier: 2,
   },
@@ -212,6 +212,9 @@ function createUI() {
 }
 
 // Build UI now
+// For this request we hide the UI chrome and show only the map.
+// Add a body class so CSS can adjust layout and hide controls.
+document.body.classList.add("hide-ui");
 createUI();
 
 // Wire up the New Game button (resets progress). Placed here so DOM

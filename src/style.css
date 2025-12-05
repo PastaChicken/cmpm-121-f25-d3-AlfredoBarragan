@@ -14,6 +14,21 @@
   gap: 12px;
 }
 
+/* When `.hide-ui` is present on the body, hide all UI chrome and give the
+   map the full viewport so the app shows only the map. */
+body.hide-ui #controlPanel,
+body.hide-ui #statusPanel,
+body.hide-ui .gps-toggle,
+body.hide-ui .hint,
+body.hide-ui .scroll-info,
+body.hide-ui #controls {
+  display: none !important;
+}
+
+body.hide-ui #map {
+  height: 100vh !important;
+}
+
 #statusPanel {
   padding: 1rem;
 }
