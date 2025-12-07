@@ -47,7 +47,7 @@ const CONFIG = {
   },
   spawn: {
     // Probability a tile will contain a cache when first considered.
-    probability: 0.3,
+    probability: 0.1,
     // Multiplier used when generating an initial point value (integer).
     initialValueMultiplier: 2,
   },
